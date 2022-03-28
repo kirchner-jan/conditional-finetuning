@@ -38,15 +38,21 @@ class TextDataset(Dataset):
             self.examples = []
             self.mask = []
             df = pd.read_csv(file_path)
+            eot_token = tokenizer.eos_token_id
             tokenized_s = [tokenizer.convert_tokens_to_ids(tokenizer.tokenize(s)) if len(s) > 0 else [] for s in tqdm(df['s'].fillna(''))  ]
             tokenized_t = [tokenizer.convert_tokens_to_ids(tokenizer.tokenize(t+'<|endoftext|>')) if len(t) > 0 else [] for t in tqdm(df['t'].fillna(''))  ]
             tokenized_text = [tokenized_s[cc] + tokenized_t[cc] for cc in range(len(tokenized_s))]
-            tokenized_text = [item for sublist in tokenized_text for item in sublist]
+            tokenized_len = [len(tokenized_text[cc]) for cc in range(len(tokenized_text))]
+            tokenized_padded = [tokenized_text[cc] + [eot_token]*(block_size-(block_size % tokenized_len[cc])) for cc in range(len(tokenized_text))]
+            tokenized_text = [item for sublist in tokenized_padded for item in sublist]
             if conditional_mask:
                 mask = [[-100]*len(tokenized_s[cc]) + tokenized_t[cc] for cc in range(len(tokenized_s))]
+                mask_len = [len(mask[cc]) for cc in range(len(mask))]
+                mask_padded = [mask[cc] + [-100]*(block_size-(block_size % mask_len[cc])) for cc in range(len(mask))]
+                mask = [item for sublist in mask_padded for item in sublist]
             else:
-                mask = [tokenized_s[cc] + tokenized_t[cc] for cc in range(len(tokenized_s))]
-            mask = [item for sublist in mask for item in sublist]
+                mask = tokenized_text
+            
 
             for i in range(0, len(tokenized_text)-block_size+1, block_size): 
                 self.examples.append(tokenizer.build_inputs_with_special_tokens(tokenized_text[i:i+block_size]))
@@ -124,4 +130,3 @@ main()
 
 if __name__ == "__main__":
     main()
-
